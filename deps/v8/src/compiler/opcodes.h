@@ -175,6 +175,7 @@
   V(JSLoadNamedFromSuper)         \
   V(JSLoadGlobal)                 \
   V(JSStoreProperty)              \
+  V(JSDefineProperty)             \
   V(JSStoreNamed)                 \
   V(JSStoreNamedOwn)              \
   V(JSStoreGlobal)                \
@@ -262,8 +263,9 @@
   V(ChangeFloat64ToTaggedPointer)    \
   V(ChangeTaggedToBit)               \
   V(ChangeBitToTagged)               \
+  V(ChangeInt64ToBigInt)             \
   V(ChangeUint64ToBigInt)            \
-  V(TruncateBigIntToUint64)          \
+  V(TruncateBigIntToWord64)          \
   V(TruncateTaggedToWord32)          \
   V(TruncateTaggedToFloat64)         \
   V(TruncateTaggedToBit)             \
@@ -499,6 +501,7 @@
   V(SpeculativeBigIntSubtract)
 
 #define SIMPLIFIED_SPECULATIVE_BIGINT_UNOP_LIST(V) \
+  V(SpeculativeBigIntAsIntN)                       \
   V(SpeculativeBigIntAsUintN)                      \
   V(SpeculativeBigIntNegate)
 
@@ -681,7 +684,7 @@
   MACHINE_FLOAT64_BINOP_LIST(V)          \
   MACHINE_FLOAT64_UNOP_LIST(V)           \
   MACHINE_ATOMIC_OP_LIST(V)              \
-  V(AbortCSAAssert)                      \
+  V(AbortCSADcheck)                      \
   V(DebugBreak)                          \
   V(Comment)                             \
   V(Load)                                \
@@ -980,6 +983,14 @@
   V(S128Select)                 \
   V(S128AndNot)                 \
   V(I8x16Swizzle)               \
+  V(I8x16RelaxedLaneSelect)     \
+  V(I16x8RelaxedLaneSelect)     \
+  V(I32x4RelaxedLaneSelect)     \
+  V(I64x2RelaxedLaneSelect)     \
+  V(F32x4RelaxedMin)            \
+  V(F32x4RelaxedMax)            \
+  V(F64x2RelaxedMin)            \
+  V(F64x2RelaxedMax)            \
   V(I8x16Shuffle)               \
   V(V128AnyTrue)                \
   V(I64x2AllTrue)               \
@@ -1120,6 +1131,7 @@ class V8_EXPORT_PRIVATE IrOpcode {
       case kJSCreateLiteralArray:
       case kJSCreateLiteralObject:
       case kJSCreateLiteralRegExp:
+      case kJSDefineProperty:
       case kJSForInNext:
       case kJSForInPrepare:
       case kJSGetIterator:

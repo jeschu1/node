@@ -13,6 +13,7 @@
 #include "src/codegen/macro-assembler.h"
 #include "src/codegen/register-configuration.h"
 #include "src/codegen/safepoint-table.h"
+#include "src/common/globals.h"
 #include "src/deoptimizer/deoptimizer.h"
 #include "src/execution/frames-inl.h"
 #include "src/execution/vm-state-inl.h"
@@ -142,7 +143,7 @@ void StackFrameIterator::Reset(ThreadLocalTop* top) {
 StackFrame* StackFrameIteratorBase::SingletonFor(StackFrame::Type type,
                                                  StackFrame::State* state) {
   StackFrame* result = SingletonFor(type);
-  DCHECK((!result) == (type == StackFrame::NONE));
+  DCHECK((!result) == (type == StackFrame::NO_FRAME_TYPE));
   if (result) result->state_ = *state;
   return result;
 }
@@ -153,7 +154,7 @@ StackFrame* StackFrameIteratorBase::SingletonFor(StackFrame::Type type) {
     return &field##_;
 
   switch (type) {
-    case StackFrame::NONE:
+    case StackFrame::NO_FRAME_TYPE:
       return nullptr;
       STACK_FRAME_TYPE_LIST(FRAME_TYPE_CASE)
     default:
@@ -318,7 +319,7 @@ SafeStackFrameIterator::SafeStackFrameIterator(Isolate* isolate, Address pc,
     : StackFrameIteratorBase(isolate, false),
       low_bound_(sp),
       high_bound_(js_entry_sp),
-      top_frame_type_(StackFrame::NONE),
+      top_frame_type_(StackFrame::NO_FRAME_TYPE),
       top_context_address_(kNullAddress),
       external_callback_scope_(isolate->external_callback_scope()),
       top_link_register_(lr) {
@@ -412,7 +413,7 @@ SafeStackFrameIterator::SafeStackFrameIterator(Isolate* isolate, Address pc,
       // The frame anyways will be skipped.
       type = StackFrame::OPTIMIZED;
       // Top frame is incomplete so we cannot reliably determine its type.
-      top_frame_type_ = StackFrame::NONE;
+      top_frame_type_ = StackFrame::NO_FRAME_TYPE;
     }
   } else {
     return;
@@ -597,7 +598,7 @@ StackFrame::Type StackFrame::ComputeType(const StackFrameIteratorBase* iterator,
     if (wasm::WasmCode* wasm_code =
             wasm::GetWasmCodeManager()->LookupCode(pc)) {
       switch (wasm_code->kind()) {
-        case wasm::WasmCode::kFunction:
+        case wasm::WasmCode::kWasmFunction:
           return WASM;
         case wasm::WasmCode::kWasmToCapiWrapper:
           return WASM_EXIT;
@@ -762,7 +763,7 @@ void ExitFrame::Iterate(RootVisitor* v) const {
 }
 
 StackFrame::Type ExitFrame::GetStateForFramePointer(Address fp, State* state) {
-  if (fp == 0) return NONE;
+  if (fp == 0) return NO_FRAME_TYPE;
   StackFrame::Type type = ComputeFrameType(fp);
 #if V8_ENABLE_WEBASSEMBLY
   Address sp = type == WASM_EXIT ? WasmExitFrame::ComputeStackPointer(fp)
@@ -968,16 +969,20 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
   bool is_wasm = false;
 
 #if V8_ENABLE_WEBASSEMBLY
+  bool has_wasm_feedback_slot = false;
   if (auto* wasm_code = wasm::GetWasmCodeManager()->LookupCode(inner_pointer)) {
     is_wasm = true;
     SafepointTable table(wasm_code);
     safepoint_entry = table.FindEntry(inner_pointer);
     stack_slots = wasm_code->stack_slots();
     has_tagged_outgoing_params =
-        wasm_code->kind() != wasm::WasmCode::kFunction &&
+        wasm_code->kind() != wasm::WasmCode::kWasmFunction &&
         wasm_code->kind() != wasm::WasmCode::kWasmToCapiWrapper;
     first_tagged_parameter_slot = wasm_code->first_tagged_parameter_slot();
     num_tagged_parameter_slots = wasm_code->num_tagged_parameter_slots();
+    if (wasm_code->is_liftoff() && FLAG_wasm_speculative_inlining) {
+      has_wasm_feedback_slot = true;
+    }
   }
 #endif  // V8_ENABLE_WEBASSEMBLY
 
@@ -1041,6 +1046,7 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
       case WASM:
       case WASM_COMPILE_LAZY:
         frame_header_size = WasmFrameConstants::kFixedFrameSizeFromFp;
+        if (has_wasm_feedback_slot) frame_header_size += kSystemPointerSize;
         break;
       case WASM_EXIT:
         // The last value in the frame header is the calling PC, which should
@@ -1059,7 +1065,7 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
         // in the place on the stack that one finds the frame type.
         UNREACHABLE();
       case NATIVE:
-      case NONE:
+      case NO_FRAME_TYPE:
       case NUMBER_OF_TYPES:
       case MANUAL:
         UNREACHABLE();
@@ -1084,6 +1090,7 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
   DCHECK_GE((stack_slots + kBitsPerByte) / kBitsPerByte,
             safepoint_entry.entry_size());
   int slot_offset = 0;
+  PtrComprCageBase cage_base(isolate());
   for (uint8_t bits : safepoint_entry.iterate_bits()) {
     while (bits) {
       int bit = base::bits::CountTrailingZeros(bits);
@@ -1097,11 +1104,39 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
       // The spill slot may actually contain weak references so we load/store
       // values using spill_slot.location() in order to avoid dealing with
       // FullMaybeObjectSlots here.
-      Tagged_t compressed_value = static_cast<Tagged_t>(*spill_slot.location());
-      if (!HAS_SMI_TAG(compressed_value)) {
-        // We don't need to update smi values.
-        *spill_slot.location() =
-            DecompressTaggedPointer(isolate(), compressed_value);
+      if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+        // When external code space is enabled the spill slot could contain both
+        // Code and non-Code references, which have different cage bases. So
+        // unconditional decompression of the value might corrupt Code pointers.
+        // However, given that
+        // 1) the Code pointers are never compressed by design (because
+        //    otherwise we wouldn't know which cage base to apply for
+        //    decompression, see respective DCHECKs in
+        //    RelocInfo::target_object()),
+        // 2) there's no need to update the upper part of the full pointer
+        //    because if it was there then it'll stay the same,
+        // we can avoid updating upper part of the spill slot if it already
+        // contains full value.
+        // TODO(v8:11880): Remove this special handling by enforcing builtins
+        // to use CodeTs instead of Code objects.
+        Address value = *spill_slot.location();
+        if (!HAS_SMI_TAG(value) && value <= 0xffffffff) {
+          // We don't need to update smi values or full pointers.
+          *spill_slot.location() =
+              DecompressTaggedPointer(cage_base, static_cast<Tagged_t>(value));
+          // Ensure that the spill slot contains correct heap object.
+          DCHECK(HeapObject::cast(Object(*spill_slot.location()))
+                     .map(cage_base)
+                     .IsMap());
+        }
+      } else {
+        Tagged_t compressed_value =
+            static_cast<Tagged_t>(*spill_slot.location());
+        if (!HAS_SMI_TAG(compressed_value)) {
+          // We don't need to update smi values.
+          *spill_slot.location() =
+              DecompressTaggedPointer(cage_base, compressed_value);
+        }
       }
 #endif
       v->VisitRootPointer(Root::kStackRoots, nullptr, spill_slot);
@@ -1297,15 +1332,21 @@ void JavaScriptFrame::PrintTop(Isolate* isolate, FILE* file, bool print_args,
       if (frame->IsConstructor()) PrintF(file, "new ");
       JSFunction function = frame->function();
       int code_offset = 0;
+      AbstractCode abstract_code = function.abstract_code(isolate);
       if (frame->is_interpreted()) {
         InterpretedFrame* iframe = reinterpret_cast<InterpretedFrame*>(frame);
         code_offset = iframe->GetBytecodeOffset();
+      } else if (frame->is_baseline()) {
+        // TODO(pthier): AbstractCode should fully support Baseline code.
+        BaselineFrame* baseline_frame = BaselineFrame::cast(frame);
+        code_offset = baseline_frame->GetBytecodeOffset();
+        abstract_code = AbstractCode::cast(baseline_frame->GetBytecodeArray());
       } else {
         Code code = frame->unchecked_code();
         code_offset = code.GetOffsetFromInstructionStart(isolate, frame->pc());
       }
-      PrintFunctionAndOffset(function, function.abstract_code(isolate),
-                             code_offset, file, print_line_number);
+      PrintFunctionAndOffset(function, abstract_code, code_offset, file,
+                             print_line_number);
       if (print_args) {
         // function arguments
         // (we are intentionally only printing the actually
@@ -1387,7 +1428,7 @@ int JavaScriptBuiltinContinuationFrame::ComputeParametersCount() const {
             kJavaScriptCallArgCountRegister.code());
   Object argc_object(
       Memory<Address>(fp() + BuiltinContinuationFrameConstants::kArgCOffset));
-  return Smi::ToInt(argc_object);
+  return Smi::ToInt(argc_object) - kJSArgcReceiverSlots;
 }
 
 intptr_t JavaScriptBuiltinContinuationFrame::GetSPToFPDelta() const {
@@ -1869,7 +1910,8 @@ JSFunction BuiltinFrame::function() const {
 
 int BuiltinFrame::ComputeParametersCount() const {
   const int offset = BuiltinFrameConstants::kLengthOffset;
-  return Smi::ToInt(Object(base::Memory<Address>(fp() + offset)));
+  return Smi::ToInt(Object(base::Memory<Address>(fp() + offset))) -
+         kJSArgcReceiverSlots;
 }
 
 #if V8_ENABLE_WEBASSEMBLY
@@ -2170,9 +2212,9 @@ void JavaScriptFrame::Print(StringStream* accumulator, PrintMode mode,
     accumulator->PrintName(scope_info.ContextLocalName(i));
     accumulator->Add(" = ");
     if (!context.is_null()) {
-      int index = Context::MIN_CONTEXT_SLOTS + i;
-      if (index < context.length()) {
-        accumulator->Add("%o", context.get(index));
+      int slot_index = Context::MIN_CONTEXT_SLOTS + i;
+      if (slot_index < context.length()) {
+        accumulator->Add("%o", context.get(slot_index));
       } else {
         accumulator->Add(
             "// warning: missing context slot - inconsistent frame?");

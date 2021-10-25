@@ -165,7 +165,6 @@ config_setting(
 # v8_control_flow_integrity
 # v8_enable_virtual_memory_cage
 # cppgc_enable_caged_heap
-# cppgc_enable_check_assignments_in_prefinalizers
 # cppgc_enable_object_names
 # cppgc_enable_verify_heap
 # cppgc_enable_young_generation
@@ -599,6 +598,7 @@ filegroup(
             "src/base/platform/platform-macos.cc",
         ],
     }),
+    visibility = ["//visibility:public"],
 )
 
 filegroup(
@@ -806,6 +806,7 @@ filegroup(
         "src/objects/js-proxy.tq",
         "src/objects/js-regexp-string-iterator.tq",
         "src/objects/js-regexp.tq",
+        "src/objects/js-temporal-objects.tq",
         "src/objects/js-weak-refs.tq",
         "src/objects/literal-objects.tq",
         "src/objects/map.tq",
@@ -894,6 +895,8 @@ filegroup(
         "src/torque/instance-type-generator.cc",
         "src/torque/instructions.cc",
         "src/torque/instructions.h",
+        "src/torque/kythe-data.cc",
+        "src/torque/kythe-data.h",
         "src/torque/parameter-difference.h",
         "src/torque/server-data.cc",
         "src/torque/server-data.h",
@@ -998,6 +1001,7 @@ filegroup(
         "src/builtins/builtins-sharedarraybuffer.cc",
         "src/builtins/builtins-string.cc",
         "src/builtins/builtins-symbol.cc",
+        "src/builtins/builtins-temporal.cc",
         "src/builtins/builtins-trace.cc",
         "src/builtins/builtins-typed-array.cc",
         "src/builtins/builtins-utils-inl.h",
@@ -1084,8 +1088,6 @@ filegroup(
         "src/common/assert-scope.cc",
         "src/common/assert-scope.h",
         "src/common/checks.h",
-        "src/common/external-pointer-inl.h",
-        "src/common/external-pointer.h",
         "src/common/message-template.h",
         "src/common/ptr-compr-inl.h",
         "src/common/ptr-compr.h",
@@ -1158,8 +1160,6 @@ filegroup(
         "src/execution/arguments.h",
         "src/execution/execution.cc",
         "src/execution/execution.h",
-        "src/execution/external-pointer-table.cc",
-        "src/execution/external-pointer-table.h",
         "src/execution/frame-constants.h",
         "src/execution/frames-inl.h",
         "src/execution/frames.cc",
@@ -1218,6 +1218,7 @@ filegroup(
         "src/flags/flag-definitions.h",
         "src/flags/flags.cc",
         "src/flags/flags.h",
+        "src/handles/global-handles-inl.h",
         "src/handles/global-handles.cc",
         "src/handles/global-handles.h",
         "src/handles/handles-inl.h",
@@ -1402,8 +1403,6 @@ filegroup(
         "src/init/startup-data-util.h",
         "src/init/v8.cc",
         "src/init/v8.h",
-        "src/init/vm-cage.cc",
-        "src/init/vm-cage.h",
         "src/interpreter/block-coverage-builder.h",
         "src/interpreter/bytecode-array-builder.cc",
         "src/interpreter/bytecode-array-builder.h",
@@ -1575,6 +1574,8 @@ filegroup(
         "src/objects/js-regexp-string-iterator.h",
         "src/objects/js-regexp.cc",
         "src/objects/js-regexp.h",
+        "src/objects/js-temporal-objects.h",
+        "src/objects/js-temporal-objects-inl.h",
         "src/objects/js-weak-refs.h",
         "src/objects/js-weak-refs-inl.h",
         "src/objects/keys.cc",
@@ -1588,6 +1589,7 @@ filegroup(
         "src/objects/lookup-inl.h",
         "src/objects/lookup.cc",
         "src/objects/lookup.h",
+        "src/objects/managed-inl.h",
         "src/objects/managed.cc",
         "src/objects/managed.h",
         "src/objects/map-inl.h",
@@ -1619,6 +1621,8 @@ filegroup(
         "src/objects/objects-definitions.h",
         "src/objects/oddball-inl.h",
         "src/objects/oddball.h",
+        "src/objects/option-utils.h",
+        "src/objects/option-utils.cc",
         "src/objects/ordered-hash-table-inl.h",
         "src/objects/ordered-hash-table.cc",
         "src/objects/ordered-hash-table.h",
@@ -1708,6 +1712,7 @@ filegroup(
         "src/objects/value-serializer.cc",
         "src/objects/value-serializer.h",
         "src/objects/visitors.cc",
+        "src/objects/visitors-inl.h",
         "src/objects/visitors.h",
         "src/parsing/expression-scope.h",
         "src/parsing/func-name-inferrer.cc",
@@ -1855,6 +1860,12 @@ filegroup(
         "src/base/sanitizer/lsan-page-allocator.h",
         "src/base/sanitizer/msan.h",
         "src/base/sanitizer/tsan.h",
+        "src/security/external-pointer-table.cc",
+        "src/security/external-pointer-table.h",
+        "src/security/external-pointer-inl.h",
+        "src/security/external-pointer.h",
+        "src/security/vm-cage.cc",
+        "src/security/vm-cage.h",
         "src/snapshot/code-serializer.cc",
         "src/snapshot/code-serializer.h",
         "src/snapshot/context-deserializer.cc",
@@ -1879,6 +1890,7 @@ filegroup(
         "src/snapshot/serializer-deserializer.h",
         "src/snapshot/serializer.cc",
         "src/snapshot/serializer.h",
+        "src/snapshot/serializer-inl.h",
         "src/snapshot/snapshot-compression.cc",
         "src/snapshot/snapshot-compression.h",
         "src/snapshot/snapshot-data.cc",
@@ -1889,6 +1901,10 @@ filegroup(
         "src/snapshot/snapshot-utils.h",
         "src/snapshot/snapshot.cc",
         "src/snapshot/snapshot.h",
+        "src/snapshot/shared-heap-deserializer.cc",
+        "src/snapshot/shared-heap-deserializer.h",
+        "src/snapshot/shared-heap-serializer.cc",
+        "src/snapshot/shared-heap-serializer.h",
         "src/snapshot/startup-deserializer.cc",
         "src/snapshot/startup-deserializer.h",
         "src/snapshot/startup-serializer.cc",
@@ -2183,6 +2199,7 @@ filegroup(
             "src/wasm/signature-map.h",
             "src/wasm/simd-shuffle.cc",
             "src/wasm/simd-shuffle.h",
+            "src/wasm/stacks.h",
             "src/wasm/streaming-decoder.cc",
             "src/wasm/streaming-decoder.h",
             "src/wasm/struct-types.h",
@@ -2276,6 +2293,7 @@ filegroup(
         ],
         "//conditions:default": [],
     }),
+    visibility = ["//visibility:public"],
 )
 
 filegroup(
@@ -2696,6 +2714,7 @@ filegroup(
         "src/heap/cppgc/task-handle.h",
         "src/heap/cppgc/trace-event.h",
         "src/heap/cppgc/trace-trait.cc",
+        "src/heap/cppgc/unmarker.h",
         "src/heap/cppgc/virtual-memory.cc",
         "src/heap/cppgc/virtual-memory.h",
         "src/heap/cppgc/visitor.cc",
@@ -2727,6 +2746,7 @@ filegroup(
         "src/bigint/bigint-internal.cc",
         "src/bigint/bigint-internal.h",
         "src/bigint/bigint.h",
+        "src/bigint/bitwise.cc",
         "src/bigint/digit-arithmetic.h",
         "src/bigint/div-barrett.cc",
         "src/bigint/div-burnikel.cc",
@@ -2909,11 +2929,11 @@ v8_torque(
         "exported-macros-assembler.h",
         "factory.cc",
         "factory.inc",
-        "field-offsets.h",
         "instance-types.h",
         "interface-descriptors.inc",
         "objects-body-descriptors-inl.inc",
         "objects-printer.cc",
+        "visitor-lists.h",
     ],
     args = select({
         ":is_v8_annotate_torque_ir": [ "-annotate-ir" ],
@@ -2993,6 +3013,30 @@ v8_mksnapshot(
 # =================================================
 # Libraries rules
 # =================================================
+cc_library(
+    name = "torque_base",
+    srcs = [
+        ":torque_base_files",
+    ],
+    copts = ["-fexceptions"],
+    features = ["-use_header_modules"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":torque_base_headers",
+        ":v8_libbase",
+    ],
+)
+
+cc_library(
+    name = "torque_base_headers",
+    hdrs = [
+        "src/torque/kythe-data.h",
+        "src/torque/torque-compiler.h",
+    ],
+    include_prefix = "third_party/v8",
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
 
 v8_library(
     name = "v8_libbase",

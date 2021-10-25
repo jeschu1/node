@@ -11,6 +11,7 @@ namespace compiler {
 
 // IA32-specific opcodes that specify which assembly sequence to emit.
 // Most opcodes specify a single instruction.
+
 #define TARGET_ARCH_OPCODE_LIST(V) \
   V(IA32Add)                       \
   V(IA32And)                       \
@@ -47,33 +48,33 @@ namespace compiler {
   V(IA32Bswap)                     \
   V(IA32MFence)                    \
   V(IA32LFence)                    \
-  V(SSEFloat32Cmp)                 \
-  V(SSEFloat32Sqrt)                \
-  V(SSEFloat32Round)               \
-  V(SSEFloat64Cmp)                 \
-  V(SSEFloat64Mod)                 \
-  V(SSEFloat32Max)                 \
-  V(SSEFloat64Max)                 \
-  V(SSEFloat32Min)                 \
-  V(SSEFloat64Min)                 \
-  V(SSEFloat64Sqrt)                \
-  V(SSEFloat64Round)               \
-  V(SSEFloat32ToFloat64)           \
-  V(SSEFloat64ToFloat32)           \
-  V(SSEFloat32ToInt32)             \
-  V(SSEFloat32ToUint32)            \
-  V(SSEFloat64ToInt32)             \
-  V(SSEFloat64ToUint32)            \
+  V(IA32Float32Cmp)                \
+  V(IA32Float32Sqrt)               \
+  V(IA32Float32Round)              \
+  V(IA32Float64Cmp)                \
+  V(IA32Float64Mod)                \
+  V(IA32Float32Max)                \
+  V(IA32Float64Max)                \
+  V(IA32Float32Min)                \
+  V(IA32Float64Min)                \
+  V(IA32Float64Sqrt)               \
+  V(IA32Float64Round)              \
+  V(IA32Float32ToFloat64)          \
+  V(IA32Float64ToFloat32)          \
+  V(IA32Float32ToInt32)            \
+  V(IA32Float32ToUint32)           \
+  V(IA32Float64ToInt32)            \
+  V(IA32Float64ToUint32)           \
   V(SSEInt32ToFloat32)             \
-  V(SSEUint32ToFloat32)            \
+  V(IA32Uint32ToFloat32)           \
   V(SSEInt32ToFloat64)             \
-  V(SSEUint32ToFloat64)            \
-  V(SSEFloat64ExtractLowWord32)    \
-  V(SSEFloat64ExtractHighWord32)   \
-  V(SSEFloat64InsertLowWord32)     \
-  V(SSEFloat64InsertHighWord32)    \
-  V(SSEFloat64LoadLowWord32)       \
-  V(SSEFloat64SilenceNaN)          \
+  V(IA32Uint32ToFloat64)           \
+  V(IA32Float64ExtractLowWord32)   \
+  V(IA32Float64ExtractHighWord32)  \
+  V(IA32Float64InsertLowWord32)    \
+  V(IA32Float64InsertHighWord32)   \
+  V(IA32Float64LoadLowWord32)      \
+  V(IA32Float64SilenceNaN)         \
   V(Float32Add)                    \
   V(Float32Sub)                    \
   V(Float64Add)                    \
@@ -152,8 +153,6 @@ namespace compiler {
   V(IA32Insertps)                  \
   V(IA32F32x4SConvertI32x4)        \
   V(IA32F32x4UConvertI32x4)        \
-  V(IA32F32x4Abs)                  \
-  V(IA32F32x4Neg)                  \
   V(IA32F32x4Sqrt)                 \
   V(IA32F32x4RecipApprox)          \
   V(IA32F32x4RecipSqrtApprox)      \
@@ -161,10 +160,8 @@ namespace compiler {
   V(IA32F32x4Sub)                  \
   V(IA32F32x4Mul)                  \
   V(IA32F32x4Div)                  \
-  V(SSEF32x4Min)                   \
-  V(AVXF32x4Min)                   \
-  V(SSEF32x4Max)                   \
-  V(AVXF32x4Max)                   \
+  V(IA32F32x4Min)                  \
+  V(IA32F32x4Max)                  \
   V(IA32F32x4Eq)                   \
   V(IA32F32x4Ne)                   \
   V(IA32F32x4Lt)                   \

@@ -2532,7 +2532,11 @@ TEST(AssemblerX64Regmove256bit) {
   CpuFeatureScope fscope(&masm, AVX);
 
   __ vmovdqa(ymm0, ymm1);
+  __ vmovdqa(ymm4, Operand(rbx, rcx, times_4, 10000));
   __ vmovdqu(ymm10, ymm11);
+  __ vmovdqu(ymm9, Operand(rbx, rcx, times_4, 10000));
+  __ vmovdqu(Operand(rbx, rcx, times_4, 10000), ymm0);
+  __ vbroadcastss(ymm7, Operand(rbx, rcx, times_4, 10000));
 
   CodeDesc desc;
   masm.GetCode(isolate, &desc);
@@ -2544,9 +2548,90 @@ TEST(AssemblerX64Regmove256bit) {
 #endif
 
   byte expected[] = {// VMOVDQA
+                     // vmovdqa ymm0,ymm1
                      0xC5, 0xFD, 0x6F, 0xC1,
+                     // vmovdqa ymm4,YMMWORD PTR [rbx+rcx*4+0x2710]
+                     0xC5, 0xFD, 0x6F, 0xA4, 0x8B, 0x10, 0x27, 0x00, 0x00,
+
                      // VMOVDQU
-                     0xC4, 0x41, 0x7E, 0x7F, 0xDA};
+                     // vmovdqu ymm10,ymm11
+                     0xC4, 0x41, 0x7E, 0x7F, 0xDA,
+                     // vmovdqu ymm9,YMMWORD PTR [rbx+rcx*4+0x2710]
+                     0xC5, 0x7E, 0x6F, 0x8C, 0x8B, 0x10, 0x27, 0x00, 0x00,
+                     // vmovdqu YMMWORD PTR [rbx+rcx*4+0x2710],ymm0
+                     0xC5, 0xFE, 0x7F, 0x84, 0x8B, 0x10, 0x27, 0x00, 0x00,
+
+                     // vbroadcastss ymm7, DWORD PTR [rbx+rcx*4+0x2710]
+                     0xc4, 0xe2, 0x7d, 0x18, 0xbc, 0x8b, 0x10, 0x27, 0x00,
+                     0x00};
+  CHECK_EQ(0, memcmp(expected, desc.buffer, sizeof(expected)));
+}
+
+TEST(AssemblerX64AVX2Op256bit) {
+  if (!CpuFeatures::IsSupported(AVX2)) return;
+  CcTest::InitializeVM();
+  v8::HandleScope scope(CcTest::isolate());
+  auto buffer = AllocateAssemblerBuffer();
+  Isolate* isolate = CcTest::i_isolate();
+  Assembler masm(AssemblerOptions{}, buffer->CreateView());
+  CpuFeatureScope fscope(&masm, AVX2);
+
+  __ vpshufd(ymm1, ymm2, 85);
+  __ vpshufd(ymm1, Operand(rbx, rcx, times_4, 10000), 85);
+  __ vpshuflw(ymm9, ymm10, 85);
+  __ vpshuflw(ymm9, Operand(rbx, rcx, times_4, 10000), 85);
+  __ vpshufhw(ymm1, ymm2, 85);
+  __ vpshufhw(ymm1, Operand(rbx, rcx, times_4, 10000), 85);
+  __ vpblendw(ymm2, ymm3, ymm4, 23);
+  __ vpblendw(ymm2, ymm3, Operand(rbx, rcx, times_4, 10000), 23);
+  __ vpalignr(ymm10, ymm11, ymm12, 4);
+  __ vpalignr(ymm10, ymm11, Operand(rbx, rcx, times_4, 10000), 4);
+  __ vbroadcastss(ymm7, xmm0);
+  __ vpbroadcastb(ymm2, xmm1);
+  __ vpbroadcastb(ymm3, Operand(rbx, rcx, times_4, 10000));
+  __ vpbroadcastw(ymm15, xmm4);
+  __ vpbroadcastw(ymm5, Operand(rbx, rcx, times_4, 10000));
+
+  CodeDesc desc;
+  masm.GetCode(isolate, &desc);
+#ifdef OBJECT_PRINT
+  Handle<Code> code =
+      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
+  StdoutStream os;
+  code->Print(os);
+#endif
+
+  byte expected[] = {
+      // vpshufd ymm1, ymm2, 85
+      0xC5, 0xFD, 0x70, 0xCA, 0x55,
+      // vpshufd ymm1,YMMWORD PTR [rbx+rcx*4+0x2710], 85
+      0xC5, 0xFD, 0x70, 0x8C, 0x8B, 0x10, 0x27, 0x00, 0x00, 0x55,
+      // vpshuflw ymm9, ymm10, 85,
+      0xC4, 0x41, 0x7F, 0x70, 0xCA, 0x55,
+      // vpshuflw ymm9,YMMWORD PTR [rbx+rcx*4+0x2710], 85
+      0xC5, 0x7F, 0x70, 0x8C, 0x8B, 0x10, 0x27, 0x00, 0x00, 0x55,
+      // vpshufhw ymm1, ymm2, 85
+      0xC5, 0xFE, 0x70, 0xCA, 0x55,
+      // vpshufhw ymm1,YMMWORD PTR [rbx+rcx*4+0x2710], 85
+      0xC5, 0xFE, 0x70, 0x8C, 0x8B, 0x10, 0x27, 0x00, 0x00, 0x55,
+      // vpblendw ymm2, ymm3, ymm4, 23
+      0xC4, 0xE3, 0x65, 0x0E, 0xD4, 0x17,
+      // vpblendw ymm2, ymm3, YMMWORD PTR [rbx+rcx*4+0x2710], 23
+      0xC4, 0xE3, 0x65, 0x0E, 0x94, 0x8B, 0x10, 0x27, 0x00, 0x00, 0x17,
+      // vpalignr ymm10, ymm11, ymm12, 4
+      0xC4, 0x43, 0x25, 0x0F, 0xD4, 0x04,
+      // vpalignr ymm10, ymm11, YMMWORD PTR [rbx+rcx*4+0x2710], 4
+      0xC4, 0x63, 0x25, 0x0F, 0x94, 0x8B, 0x10, 0x27, 0x00, 0x00, 0x04,
+      // vbroadcastss ymm7, xmm0
+      0xc4, 0xe2, 0x7d, 0x18, 0xf8,
+      // vpbroadcastb ymm2, xmm1
+      0xc4, 0xe2, 0x7d, 0x78, 0xd1,
+      // vpbroadcastb ymm3, BYTE PTR [rbx+rcx*4+0x2710]
+      0xc4, 0xe2, 0x7d, 0x78, 0x9c, 0x8b, 0x10, 0x27, 0x00, 0x00,
+      // vpbroadcastw ymm15, xmm4
+      0xc4, 0x62, 0x7d, 0x79, 0xfc,
+      // vpbroadcastw ymm5, WORD PTR [rbx+rcx*4+0x2710]
+      0xc4, 0xe2, 0x7d, 0x79, 0xac, 0x8b, 0x10, 0x27, 0x00, 0x00};
   CHECK_EQ(0, memcmp(expected, desc.buffer, sizeof(expected)));
 }
 
@@ -2562,6 +2647,10 @@ TEST(AssemblerX64FloatingPoint256bit) {
   __ vsqrtps(ymm0, ymm1);
   __ vunpcklps(ymm2, ymm3, ymm14);
   __ vsubps(ymm10, ymm11, ymm12);
+  __ vroundps(ymm9, ymm2, kRoundUp);
+  __ vroundpd(ymm9, ymm2, kRoundToNearest);
+  __ vhaddps(ymm1, ymm2, ymm3);
+  __ vhaddps(ymm0, ymm1, Operand(rbx, rcx, times_4, 10000));
 
   CodeDesc desc;
   masm.GetCode(isolate, &desc);
@@ -2577,7 +2666,15 @@ TEST(AssemblerX64FloatingPoint256bit) {
                      // VUNPCKLPS
                      0xC4, 0xC1, 0x64, 0x14, 0xD6,
                      // VSUBPS
-                     0xC4, 0x41, 0x24, 0x5C, 0xD4};
+                     0xC4, 0x41, 0x24, 0x5C, 0xD4,
+                     // vroundps ymm9, ymm2, 0xA
+                     0xC4, 0x63, 0x7D, 0x08, 0xCA, 0x0A,
+                     // vroundpd ymm9, ymm2, 0x8
+                     0xC4, 0x63, 0x7D, 0x09, 0xCA, 0x08,
+                     // VHADDPS ymm1, ymm2, ymm3
+                     0xC5, 0xEF, 0x7C, 0xCB,
+                     // VHADDPS ymm0, ymm1, YMMWORD PTR [rbx+rcx*4+0x2710]
+                     0xc5, 0xf7, 0x7c, 0x84, 0x8b, 0x10, 0x27, 0x00, 0x00};
   CHECK_EQ(0, memcmp(expected, desc.buffer, sizeof(expected)));
 }
 

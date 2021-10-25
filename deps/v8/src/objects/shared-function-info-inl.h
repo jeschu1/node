@@ -244,8 +244,6 @@ SharedFunctionInfo::Inlineability SharedFunctionInfo::GetInlineability(
     return kNeedsBinaryCoverage;
   }
 
-  if (optimization_disabled()) return kHasOptimizationDisabled;
-
   // Built-in functions are handled by the JSCallReducer.
   if (HasBuiltinId()) return kIsBuiltin;
 
@@ -265,6 +263,8 @@ SharedFunctionInfo::Inlineability SharedFunctionInfo::GetInlineability(
   }
 
   if (HasBreakInfo()) return kMayContainBreakPoints;
+
+  if (optimization_disabled()) return kHasOptimizationDisabled;
 
   return kIsInlineable;
 }
@@ -844,9 +844,9 @@ void UncompiledData::InitAfterBytecodeFlush(
   set_end_position(end_position);
 }
 
-HeapObject SharedFunctionInfo::script() const {
-  HeapObject maybe_script = script_or_debug_info(kAcquireLoad);
-  if (maybe_script.IsDebugInfo()) {
+DEF_GETTER(SharedFunctionInfo, script, HeapObject) {
+  HeapObject maybe_script = script_or_debug_info(cage_base, kAcquireLoad);
+  if (maybe_script.IsDebugInfo(cage_base)) {
     return DebugInfo::cast(maybe_script).script();
   }
   return maybe_script;
